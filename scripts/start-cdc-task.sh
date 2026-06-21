@@ -17,16 +17,22 @@ done
 
 echo "TiCDC is ready."
 
+echo "Checking if changefeed '${CHANGEFEED_ID}' already exists."
+
 if /cdc cli changefeed query --pd="${PD_ADDR}" --changefeed-id="${CHANGEFEED_ID}" >/dev/null 2>&1; then
-  echo "Changefeed already exists. Skipping creation."
+  echo "Changefeed '${CHANGEFEED_ID}' already exists."
 else
   echo "Creating changefeed '${CHANGEFEED_ID}'."
   echo "Sink URI: ${SINK_URI}"
 
-  /cdc cli changefeed create \
+  until /cdc cli changefeed create \
     --pd="${PD_ADDR}" \
     --changefeed-id="${CHANGEFEED_ID}" \
-    --sink-uri="${SINK_URI}"
+    --sink-uri="${SINK_URI}"; do
+
+    echo "Failed to create changefeed. Kafka may not be ready yet. Retrying in 5 seconds."
+    sleep 5
+  done
 
   echo "Changefeed created successfully."
 fi

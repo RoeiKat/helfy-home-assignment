@@ -46,8 +46,12 @@ services:
     container_name: init-db
     depends_on:
       - tidb
-    env_file:
-      - .env
+    environment:
+      DB_HOST: tidb
+      DB_PORT: 4000
+      DB_USER: root
+      DB_PASSWORD: ""
+      DB_NAME: helfy_assignment
     volumes:
       - ./tidb/init:/docker-entrypoint-initdb.d
       - ./scripts/init-db.sh:/scripts/init-db.sh
@@ -58,8 +62,13 @@ services:
     build:
       context: ./api
     container_name: api
-    env_file:
-      - .env
+    environment:
+      PORT: 3000
+      DB_HOST: tidb
+      DB_PORT: 4000
+      DB_USER: root
+      DB_PASSWORD: ""
+      DB_NAME: helfy_assignment
     ports:
       - "3000:3000"
     depends_on:
@@ -86,7 +95,7 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
     volumes:
-      - kafka-data:/var/lib/kafka/data  
+      - kafka-data:/var/lib/kafka/data
 
   ticdc:
     image: pingcap/ticdc:v8.1.0
@@ -112,8 +121,12 @@ services:
       - ticdc
       - kafka
       - init-db
-    env_file:
-      - .env
+    environment:
+      PD_ADDR: http://pd:2379
+      CHANGEFEED_ID: helfy-assignment-changefeed
+      DB_NAME: helfy_assignment
+      KAFKA_BROKER: kafka:9092
+      KAFKA_TOPIC: tidb-cdc-events
     volumes:
       - ./scripts/start-cdc-task.sh:/scripts/start-cdc-task.sh
     entrypoint: ["/bin/sh", "/scripts/start-cdc-task.sh"]
@@ -123,14 +136,25 @@ services:
     build:
       context: ./consumer
     container_name: consumer
-    env_file:
-      - .env
+    environment:
+      KAFKA_BROKER: kafka:9092
+      KAFKA_TOPIC: tidb-cdc-events
     depends_on:
       - kafka
       - init-cdc
     restart: unless-stopped
-  
 
+  client:
+    build:
+      context: ./client
+    container_name: client
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_BASE_URL: http://localhost:3000
+    depends_on:
+      - api
+    restart: unless-stopped
 
 volumes:
   pd-data:
