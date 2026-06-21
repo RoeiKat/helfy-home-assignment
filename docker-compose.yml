@@ -1,0 +1,72 @@
+services:
+  pd:
+    image: pingcap/pd:v8.1.0
+    container_name: pd
+    command:
+      - --name=pd
+      - --data-dir=/data/pd
+      - --client-urls=http://0.0.0.0:2379
+      - --peer-urls=http://0.0.0.0:2380
+      - --advertise-client-urls=http://pd:2379
+      - --advertise-peer-urls=http://pd:2380
+      - --initial-cluster=pd=http://pd:2380
+    ports:
+      - "2379:2379"
+    volumes:
+      - pd-data:/data/pd
+
+  tikv:
+    image: pingcap/tikv:v8.1.0
+    container_name: tikv
+    command:
+      - --addr=0.0.0.0:20160
+      - --advertise-addr=tikv:20160
+      - --pd=pd:2379
+      - --data-dir=/data/tikv
+    depends_on:
+      - pd
+    volumes:
+      - tikv-data:/data/tikv
+
+  tidb:
+    image: pingcap/tidb:v8.1.0
+    container_name: tidb
+    command:
+      - --store=tikv
+      - --path=pd:2379
+      - --host=0.0.0.0
+    ports:
+      - "4000:4000"
+    depends_on:
+      - pd
+      - tikv
+
+  init-db:
+    image: mysql:8.0
+    container_name: init-db
+    depends_on:
+      - tidb
+    env_file:
+      - .env
+    volumes:
+      - ./tidb/init:/docker-entrypoint-initdb.d
+      - ./scripts/init-db.sh:/scripts/init-db.sh
+    entrypoint: ["/bin/sh", "/scripts/init-db.sh"]
+    restart: "no"
+
+  api:
+    build:
+      context: ./api
+    container_name: api
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    depends_on:
+      init-db:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+volumes:
+  pd-data:
+  tikv-data:
